@@ -36,10 +36,10 @@ fi
 # -----------------------------------
 # 3. Install dependencies
 # -----------------------------------
-if [ ! -d vendor ]; then
-    echo "Installing dependencies..."
-    composer install --no-interaction --prefer-dist --optimize-autoloader
-fi
+
+echo "Installing dependencies..."
+composer install --no-interaction --prefer-dist --optimize-autoloader
+
 
 # -----------------------------------
 # 4. Fix permissions

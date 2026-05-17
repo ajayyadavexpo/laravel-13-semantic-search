@@ -1,0 +1,97 @@
+services:
+  app:
+    build: .
+    volumes:
+      - ./:/var/www
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: laravel_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: user123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d laravel_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  queue:
+    build: .
+    entrypoint: []
+    command: >
+      sh -c "
+      echo '⏳ Waiting for DB & migrations...' &&
+      until php artisan migrate:status > /dev/null 2>&1; do sleep 2; done &&
+      php artisan queue:work --tries=3 --timeout=90
+      "
+    volumes:
+      - ./:/var/www
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - app
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    entrypoint: []
+    command: >
+      sh -c "
+      echo '⏳ Waiting for DB & migrations...' &&
+      until php artisan migrate:status > /dev/null 2>&1; do sleep 2; done &&
+      php artisan schedule:work
+      "
+    volumes:
+      - ./:/var/www
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - app
+      - postgres
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "8025:8025"
+    restart: unless-stopped
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
